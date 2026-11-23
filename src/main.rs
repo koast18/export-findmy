@@ -308,6 +308,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let password_hash: Vec<u8> = Sha256::digest(password.as_bytes()).to_vec();
     let appleid_closure = move || (apple_id_clone.clone(), password_hash.clone());
     let tfa_closure = || {
+        // 支持从文件读取 2FA 码（便于脚本化/远程驱动），否则回退到 stdin
+        let candidates = ["C:/temp/ef/2fa_code.txt", "/tmp/2fa_code.txt"];
+        eprintln!(">>> 等待 2FA 码：把 6 位码写入 {} （最多等 10 分钟）", candidates[0]);
+        for _ in 0..600 {
+            for path in candidates.iter() {
+                if let Ok(text) = std::fs::read_to_string(path) {
+                    let code = text.trim().to_string();
+                    if !code.is_empty() {
+                        eprintln!(">>> 读到 2FA 码: {}", code);
+                        return code;
+                    }
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
         eprint!("2FA code: ");
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).unwrap();
