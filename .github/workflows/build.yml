@@ -16,6 +16,10 @@ jobs:
           sudo apt-get install -y protobuf-compiler libssl-dev pkg-config
       - name: git url rewrite
         run: git config --global url."https://github.com/".insteadOf "git@github.com:"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: linux
+          cache-on-failure: true
       - name: build
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
@@ -38,6 +42,10 @@ jobs:
           echo "C:\ProgramData\chocolatey\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: git url rewrite
         run: git config --global url."https://github.com/".insteadOf "git@github.com:"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows
+          cache-on-failure: true
       - name: build
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
