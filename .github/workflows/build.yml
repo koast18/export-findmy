@@ -1,0 +1,49 @@
+name: build
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler libssl-dev pkg-config
+      - name: git url rewrite
+        run: git config --global url."https://github.com/".insteadOf "git@github.com:"
+      - name: build
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+        run: |
+          rustup toolchain install stable --profile minimal
+          cargo build --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: export-findmy-linux
+          path: target/release/export-findmy
+          if-no-files-found: warn
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps
+        run: |
+          choco install protoc --no-progress -y
+          echo "C:\ProgramData\chocolatey\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: git url rewrite
+        run: git config --global url."https://github.com/".insteadOf "git@github.com:"
+      - name: build
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+        run: cargo build --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: export-findmy-windows
+          path: target/release/export-findmy.exe
+          if-no-files-found: warn
