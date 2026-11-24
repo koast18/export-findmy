@@ -390,8 +390,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 调试：MobileMe 配置里到底有哪些 dataclass / 是否带 escrowProxyUrl
     eprintln!("  [debug] mobileme config 顶层键: {:?}", mobileme.config.keys().collect::<Vec<_>>());
     {
-        let dump = plist::to_formatted_string(&plist::Value::Dictionary(mobileme.config.clone()), plist::XmlWriteOptions::default())
-            .unwrap_or_default();
+        let mut buf: Vec<u8> = Vec::new();
+        let _ = plist::to_writer_xml(&mut buf, &plist::Value::Dictionary(mobileme.config.clone()));
+        let dump = String::from_utf8_lossy(&buf).to_string();
         eprintln!("  [debug] mobileme config 全文({}B): {}", dump.len(), &dump[..dump.len().min(4000)]);
     }
     for (k, v) in mobileme.config.iter() {
