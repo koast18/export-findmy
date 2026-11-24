@@ -329,13 +329,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         input.trim().to_string()
     };
 
-    let account = AppleAccount::login(
-        appleid_closure,
-        tfa_closure,
-        login_info,
-        anisette_client.clone(),
-    )
-    .await?;
+    // ── 登录态缓存：命中就直接复用，避免每次都要 2FA ─────────────
+    let spd_cache = std::env::var("EXPORT_FINDMY_SPD")
+        .unwrap_or_else(|_| "C:/temp/ef/apple_spd.plist".to_string());
+    let account = if std::path::Path::new(&spd_cache).exists() {
+        let spd: plist::Dictionary = plist::from_file(&spd_cache)?;
+        let mut acc = AppleAccount::new_with_anisette(login_info.clone(), anisette_client.clone())?;
+        acc.restore_from_spd(spd);
+        eprintln!("  (复用登录态 {}，跳过 2FA)", spd_cache);
+        acc
+    } else {
+        let acc = AppleAccount::login(
+            appleid_closure,
+            tfa_closure,
+            login_info,
+            anisette_client.clone(),
+        )
+        .await?;
+        if let Some(spd) = acc.spd.clone() {
+            plist::to_file_binary(&spd_cache, &plist::Value::Dictionary(spd))?;
+            eprintln!("  (登录态已缓存到 {})", spd_cache);
+        }
+        acc
+    };
 
     let spd = account.spd.as_ref().expect("No SPD after login");
     let dsid = spd["DsPrsId"]
