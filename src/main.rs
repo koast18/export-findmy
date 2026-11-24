@@ -392,6 +392,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── Step 4: Create CloudKit + Keychain clients ──────────────────
     eprintln!("[4/7] Setting up CloudKit & Keychain...");
 
+    // 调试：MobileMe 配置里到底有哪些 dataclass / 是否带 escrowProxyUrl
+    eprintln!("  [debug] mobileme config 顶层键: {:?}", mobileme.config.keys().collect::<Vec<_>>());
+    for (k, v) in mobileme.config.iter() {
+        if let Some(d) = v.as_dictionary() {
+            let has_escrow = d.contains_key("escrowProxyUrl");
+            eprintln!("    - {} : escrowProxyUrl={} keys={:?}", k, has_escrow,
+                d.keys().take(8).collect::<Vec<_>>());
+        }
+    }
+
     let keychain_state = KeychainClientState::new(dsid.clone(), adsid.clone(), &mobileme)
         .unwrap_or_else(|| {
             eprintln!("  (escrowProxyUrl not in MobileMe config, using default)");
