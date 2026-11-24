@@ -329,29 +329,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         input.trim().to_string()
     };
 
-    // ── 登录态缓存：命中就直接复用，避免每次都要 2FA ─────────────
+    // ── 登录态缓存：命中就复用；但 SPD 里没有 PET 时仍要完整登录一次 ──
     let spd_cache = std::env::var("EXPORT_FINDMY_SPD")
         .unwrap_or_else(|_| "C:/temp/ef/apple_spd.plist".to_string());
-    let account = if std::path::Path::new(&spd_cache).exists() {
+
+    let mut account = if std::path::Path::new(&spd_cache).exists() {
         let spd: plist::Dictionary = plist::from_file(&spd_cache)?;
         let mut acc = AppleAccount::new_with_anisette(login_info.clone(), anisette_client.clone())?;
         acc.restore_from_spd(spd);
         eprintln!("  (复用登录态 {}，跳过 2FA)", spd_cache);
         acc
     } else {
-        let acc = AppleAccount::login(
+        AppleAccount::login(
             appleid_closure,
             tfa_closure,
-            login_info,
+            login_info.clone(),
+            anisette_client.clone(),
+        )
+        .await?
+    };
+
+    // verify_2fa 只把 token 放进 headers，不会刷新 SPD；缓存的 SPD 里若没有
+    // com.apple.gs.idms.pet（"No pet!" panic 的来源），就要再完整登录一次。
+    if account.get_pet().is_none() {
+        eprintln!("  (缓存缺少 PET 令牌，执行完整登录一次)");
+        account = AppleAccount::login(
+            appleid_closure,
+            tfa_closure,
+            login_info.clone(),
             anisette_client.clone(),
         )
         .await?;
-        if let Some(spd) = acc.spd.clone() {
-            plist::to_file_binary(&spd_cache, &plist::Value::Dictionary(spd))?;
-            eprintln!("  (登录态已缓存到 {})", spd_cache);
-        }
-        acc
-    };
+    }
+
+    if let Some(spd) = account.spd.clone() {
+        plist::to_file_binary(&spd_cache, &plist::Value::Dictionary(spd))?;
+        eprintln!("  (登录态已缓存到 {}，下一步 tokens: {:?})", spd_cache, account.tokens.keys().collect::<Vec<_>>());
+    }
 
     let spd = account.spd.as_ref().expect("No SPD after login");
     let dsid = spd["DsPrsId"]
