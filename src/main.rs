@@ -341,8 +341,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         acc
     } else {
         AppleAccount::login(
-            appleid_closure,
-            tfa_closure,
+            &appleid_closure,
+            &tfa_closure,
             login_info.clone(),
             anisette_client.clone(),
         )
