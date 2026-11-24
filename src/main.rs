@@ -308,25 +308,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let password_hash: Vec<u8> = Sha256::digest(password.as_bytes()).to_vec();
     let appleid_closure = move || (apple_id_clone.clone(), password_hash.clone());
     let tfa_closure = || {
-        // 支持从文件读取 2FA 码（便于脚本化/远程驱动），否则回退到 stdin
-        let candidates = ["C:/temp/ef/2fa_code.txt", "/tmp/2fa_code.txt"];
-        eprintln!(">>> 等待 2FA 码：把 6 位码写入 {} （最多等 30 分钟）", candidates[0]);
-        for _ in 0..1800 {
-            for path in candidates.iter() {
-                if let Ok(text) = std::fs::read_to_string(path) {
-                    let code = text.trim().to_string();
-                    if !code.is_empty() {
-                        eprintln!(">>> 读到 2FA 码: {}", code);
-                        return code;
-                    }
-                }
-            }
-            std::thread::sleep(std::time::Duration::from_secs(1));
-        }
         eprint!("2FA code: ");
         let mut input = String::new();
-        std::io::stdin().read_line(&mut input).unwrap();
-        input.trim().to_string()
+        let _ = std::io::stdin().read_line(&mut input);
+        let code = input.trim().to_string();
+        if code.is_empty() {
+            // 退回文件（脚本化场景）
+            for path in ["C:/temp/ef/2fa_code.txt", "/tmp/2fa_code.txt"] {
+                if let Ok(t) = std::fs::read_to_string(path) {
+                    let c = t.trim().to_string();
+                    if !c.is_empty() { return c; }
+                }
+            }
+        }
+        code
     };
 
     // ── 登录态缓存：命中就复用；但 SPD 里没有 PET 时仍要完整登录一次 ──
@@ -394,6 +389,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 调试：MobileMe 配置里到底有哪些 dataclass / 是否带 escrowProxyUrl
     eprintln!("  [debug] mobileme config 顶层键: {:?}", mobileme.config.keys().collect::<Vec<_>>());
+    {
+        let dump = plist::to_formatted_string(&plist::Value::Dictionary(mobileme.config.clone()), plist::XmlWriteOptions::default())
+            .unwrap_or_default();
+        eprintln!("  [debug] mobileme config 全文({}B): {}", dump.len(), &dump[..dump.len().min(4000)]);
+    }
     for (k, v) in mobileme.config.iter() {
         if let Some(d) = v.as_dictionary() {
             let has_escrow = d.contains_key("escrowProxyUrl");
